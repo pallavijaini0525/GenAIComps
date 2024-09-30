@@ -31,6 +31,8 @@ transformers[sentencepiece]
 
 uvicorn
 
+psycopg2-binary
+
 # used by document loader
 # beautifulsoup4
 # easyocr

@@ -2,4 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 duckduckgo_search:
+  description: Search the web for general queries and return relevant text.
   callable_api: ddg-search
+
+search_annual_earnings:
+  description: Search for all company earnings reports, including annual and quarterly earnings filings. Provides detailed information on Apple financial performance based on the provided query.
+  callable_api: custom_tools.py:search_retrieval_knowledge_base
+  args_schema:
+    query:
+      type: str
+      description: The query to search for in the research base.
+  return_output: retrieved_data

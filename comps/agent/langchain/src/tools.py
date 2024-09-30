@@ -7,10 +7,16 @@ import os
 import sys
 
 import yaml
+from typing import List
+
+# from pydantic import create_model, Field
+from pydantic import BaseModel, Field, create_model
 from langchain.tools import BaseTool, StructuredTool
 from langchain_community.agent_toolkits.load_tools import load_tools
-from pydantic import BaseModel, Field, create_model
-
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain_community.utilities import SQLDatabase
+from langchain_community.llms import HuggingFaceEndpoint
+from comps.agent.langchain.src.custom_langchain.sqldatabasetoolkit import CustomSQLDatabaseToolkit
 
 def generate_request_function(url):
     def process_request(query):
@@ -59,6 +65,29 @@ def load_func_str(tools_dir, func_str, env=None, pip_dependencies=None):
         spec.loader.exec_module(module)
         func_str = getattr(module, func_name)
 
+    elif "SQLDatabaseToolkit" in func_str:
+
+        sql_params = {
+            "max_string_length": 3600,
+        }
+        db = SQLDatabase.from_uri("postgresql://testuser:testpwd@10.138.190.69:5432/vectordb",  **sql_params)
+        print(db.dialect)
+        print(db.get_usable_table_names())
+        
+        llm = HuggingFaceEndpoint(
+            endpoint_url="http://10.138.190.69:9009/",
+            max_new_tokens=512,
+            top_k=10,
+            top_p=0.95,
+            typical_p=0.95,
+            temperature=0.01,
+            repetition_penalty=1.03,
+            streaming=True,
+            truncate=1024
+        )
+        toolkit = CustomSQLDatabaseToolkit(db=db, llm=llm)
+        return toolkit.get_tools()
+
     # case 3: func is a langchain tool
     elif "." not in func_str:
         return load_tools([func_str])[0]
@@ -88,7 +117,7 @@ def load_langchain_tool(tools_dir, tool_setting_tuple):
     pip_dependencies = tool_setting["pip_dependencies"] if "pip_dependencies" in tool_setting else None
     func_definition = load_func_str(tools_dir, tool_setting["callable_api"], env, pip_dependencies)
     if "args_schema" not in tool_setting or "description" not in tool_setting:
-        if isinstance(func_definition, BaseTool):
+        if isinstance(func_definition, BaseTool) or isinstance(func_definition, List):
             return func_definition
         else:
             raise ValueError(
@@ -111,8 +140,13 @@ def load_yaml_tools(file_dir_path: str):
     if tools_setting is None or len(tools_setting) == 0:
         return tools
     for t in tools_setting.items():
-        tools.append(load_langchain_tool(tools_dir, t))
+        result = load_langchain_tool(tools_dir, t)
+        if isinstance(result, list):
+            tools.extend(result)
+        else:
+            tools.append(result)
     return tools
+
 
 
 def load_python_tools(file_dir_path: str):
